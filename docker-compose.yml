@@ -3,16 +3,25 @@ version: '3'
 services:
   massbank-web:
     build: .
+    image: fforootd/massbank-docker:latest
     ports:
-     - "5000:5000"
-  massbank-db:
+     - "80:80"
+    volumes:
+     - /massbank/modules/sql:/modules/sql
+    command: service apache2 start
+    command: service apache2 start
+    command: tail -f /dev/null
+    links:
+     - db
+
+  db:
     image: mariadb:10.1
     container_name: massbank_mariadb
     volumes:
       - /mariadb:/var/lib/mysql
-      - $PWD/modules/sql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      - /modules/sql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     ports:
-      - '127.0.0.1:3306:3306'
+      - '0.0.0.0:3306:3306'
     environment:
       MYSQL_ROOT_PASSWORD: bird2006
     restart: always

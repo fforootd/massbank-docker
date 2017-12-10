@@ -1,7 +1,7 @@
 FROM ubuntu:16.04
 
-ENV MBUSERNAME=massbankuser
-ENV PASSWORD=massbankpassword
+ARG MBUSERNAME=massbankuser
+ARG PASSWORD=massbankpassword
 
 RUN dpkg --add-architecture i386
 
@@ -28,19 +28,21 @@ RUN apt-get install -y -q \
 
 RUN git clone https://github.com/MassBank/MassBank-web
 
+RUN cp -r /MassBank-web/* /
+
 # Install Files Path
-ENV INST_ROOT_PATH=$PWD/modules
-ENV INST_HTDOCS_PATH=$INST_ROOT_PATH/apache/html
-ENV INST_ERROR_PATH=$INST_ROOT_PATH/apache/error
-ENV INST_CONF_PATH=$INST_ROOT_PATH/apache/conf
+ARG INST_ROOT_PATH=$PWD/modules
+ARG INST_HTDOCS_PATH=$INST_ROOT_PATH/apache/html
+ARG INST_ERROR_PATH=$INST_ROOT_PATH/apache/error
+ARG INST_CONF_PATH=$INST_ROOT_PATH/apache/conf
 
 # Apache Path
-ENV APACHE_HTDOCS_PATH=/var/www/html
-ENV APACHE_ERROR_PATH=/var/www/error
-ENV APACHE_CACHE_PATH=/var/cache/apache2
+ARG APACHE_HTDOCS_PATH=/var/www/html
+ARG APACHE_ERROR_PATH=/var/www/error
+ARG APACHE_CACHE_PATH=/var/cache/apache2
 
 # Tomcat Path
-ENV DEST_TOMCAT_PATH=/var/lib/tomcat8
+ARG DEST_TOMCAT_PATH=/var/lib/tomcat8
 
 RUN echo
 RUN echo ">> service stop"
@@ -48,7 +50,7 @@ RUN service tomcat8 stop
 RUN service apache2 stop
 
 RUN echo "apache files copy"
-RUN cp -r $INST_HTDOCS_PATH/. $APACHE_HTDOCS_PATH
+RUN cp -r $INST_HTDOCS_PATH/.  $APACHE_HTDOCS_PATH
 RUN cp -r $INST_ERROR_PATH/. $APACHE_ERROR_PATH
 RUN chown -R www-data:www-data /var/www/*
 
@@ -66,6 +68,7 @@ RUN install -m 644 -o root -g root $INST_CONF_PATH/010-a2site-massbank.conf /etc
 RUN a2ensite 010-a2site-massbank
 
 RUN echo "compile and install Search.cgi"
+RUN ls -latr
 RUN (cd ./modules/Search.cgi/ ; make clean ; make )
 RUN install -m 755 -o www-data -g www-data ./modules/Search.cgi/Search.cgi $APACHE_HTDOCS_PATH/MassBank/cgi-bin/
 
@@ -86,8 +89,8 @@ RUN cp MassBank-Project/api/target/api.war $DEST_TOMCAT_PATH/webapps/
 # add tomcat folders until
 # https://bugs.launchpad.net/ubuntu/+source/tomcat7/+bug/1482893
 # is fixed
-ENV TOMCAT_SHARE_PATH=/usr/share/tomcat8
-ENV TOMCAT_CACHE_PATH=/var/cache/tomcat8
+ARG TOMCAT_SHARE_PATH=/usr/share/tomcat8
+ARG TOMCAT_CACHE_PATH=/var/cache/tomcat8
 RUN mkdir $TOMCAT_SHARE_PATH/common
 RUN mkdir $TOMCAT_SHARE_PATH/common/classes
 RUN mkdir $TOMCAT_SHARE_PATH/server
@@ -100,15 +103,18 @@ RUN echo "increase default maximum JAVA heap size for Tomcat"
 RUN sed -i 's/Xmx128m/Xmx512m/g' /usr/share/tomcat8/defaults.template
 RUN sed -i 's/Xmx128m/Xmx512m/g' /etc/default/tomcat8
 
+
 RUN echo "configure Tomcat if not already done"
-RUN if ! grep '^<Connector port="8009" protocol="AJP/1.3" redirectPort="8443" />$' $DEST_TOMCAT_PATH/conf/server.xml ; then \
-sed -i -e 's#<!-- Define an AJP 1.3 Connector on port 8009 -->#<!-- Define an AJP 1.3 Connector on port 8009 -->\n<Connector port="8009" protocol="AJP/1.3" redirectPort="8443" />#' $DEST_TOMCAT_PATH/conf/server.xml    \
-fi 
+RUN if ! grep '^<Connector port="8009" protocol="AJP/1.3" redirectPort="8443" />$' $DEST_TOMCAT_PATH/conf/server.xml ; then sed -i -e 's#<!-- Define an AJP 1.3 Connector on port 8009 -->#<!-- Define an AJP 1.3 Connector on port 8009 -->\n<Connector port="8009" protocol="AJP/1.3" redirectPort="8443" />#' $DEST_TOMCAT_PATH/conf/server.xml ; fi 
+
 
 RUN echo "allow webapp write permission to apache folder"
 RUN chown -R tomcat8:tomcat8 $APACHE_HTDOCS_PATH/MassBank/DB/
 RUN chown -R tomcat8:tomcat8 $APACHE_HTDOCS_PATH/MassBank/massbank.conf
 RUN chown -R tomcat8:tomcat8 $APACHE_HTDOCS_PATH/MassBank/svn_wc/
+
+## This is a workaround
+RUN cp -r $APACHE_HTDOCS_PATH/MassBank/massbank.conf /var/lib/tomcat8/massbank.conf
 
 # Deploy permissions to tomcat
 RUN chown -R tomcat8:tomcat8 $TOMCAT_SHARE_PATH
@@ -122,10 +128,6 @@ RUN find $TOMCAT_CACHE_PATH -type d -exec chmod 755 {} \;
 RUN find $APACHE_HTDOCS_PATH -type d -exec chmod 755 {} \;
 RUN find $APACHE_HTDOCS_PATH -type f -exec chmod 644 {} \;
 RUN find $APACHE_HTDOCS_PATH/MassBank -name "*.cgi" -type f -exec chmod 755 {} \;
-
-RUN echo ">> service start"
-RUN service tomcat8 restart 
-RUN service apache2 restart
 
 RUN echo "append curation scripts to crontab"
 RUN IFS='<';echo $(sed '$i0 0   * * *   www-data    bash /var/www/html/MassBank/script/Sitemap.sh' /etc/crontab) > /etc/crontab
@@ -141,4 +143,6 @@ RUN echo "Please edit \"FrontServer URL\" of \""$APACHE_HTDOCS_PATH"/MassBank/ma
 RUN echo
 RUN echo
 
+RUN sed -i 's/127.0.0.1/db/g' /var/www/html/MassBank/cgi-bin/DB_HOST_NAME
 
+RUN cat /var/www/html/MassBank/cgi-bin/DB_HOST_NAME
